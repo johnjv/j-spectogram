@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, minimum-scale=1, initial-scale=1, user-scalable=yes">
+
+    <title>j-spectogram demo</title>
+
+    <script src="../../bower_components/webcomponentsjs/webcomponents-lite.js"></script>
+
+    <link rel="import" href="../../bower_components/iron-demo-helpers/demo-pages-shared-styles.html">
+    <link rel="import" href="../../bower_components/iron-demo-helpers/demo-snippet.html">
+    <link rel="import" href="../j-spectogram.html">
+
+    <custom-style>
+      <style is="custom-style" include="demo-pages-shared-styles">
+        body {
+          margin: 0;
+          padding: 0;
+          height: 100vh;
+          width: 100vw;
+        }
+      </style>
+    </custom-style>
+  </head>
+  <body>
+    <script>
+      var AudioContext = window.AudioContext || window.webkitAudioContext;
+      audioContext = new AudioContext();
+    </script>
+    <j-spectogram></j-spectogram>
+  </body>
+</html>

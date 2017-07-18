@@ -1,0 +1,264 @@
+<link rel="import" href="../bower_components/polymer/polymer-element.html">
+
+<dom-module id="j-spectogram">
+  <template>
+    <style>
+      :host {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      #canvas {
+        width: 100%;
+        height: 100%;
+      }
+      h1 {
+        margin: 0;
+        position: absolute;
+        bottom: 16px;
+        left: 16px;
+        color: white;
+        font-family: monospace;
+      }
+      #content {
+        background: black;
+        position: absolute;
+        bottom: 20vh;
+        left: 26vw;
+        color: white;
+        font-family: monospace;
+        padding: 24px;
+        font-size: 1.25em;
+      }
+      #content a {
+        color: white;
+      }
+    </style>
+    <canvas id="canvas">¯\_(ツ)_/¯</canvas>
+    <h1>variable j</h1>
+    <div id="content" style="display:none;">
+      <h2>thanks for listening!</h2>
+      <p>made with: 
+        <ul>
+          <li>canvas</li><li>web audio api</li><li>polymer</li>
+        </ul>
+      </p>
+      <p>~~~</p>
+      <p><a href="https://variablej.audio">https://variablej.audio</a></p>
+      <p>instagram: @variable_j</p>
+    </div>
+  </template>
+
+  <script>
+    /**
+     * `j-spectogram`
+     * audio visualizer
+     *
+     * @customElement
+     * @polymer
+     * @demo demo/index.html
+     */
+    class JSpectogram extends Polymer.Element {
+      constructor() {
+        super();
+        this.fftSize = 2048;
+        // store window width and height
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+        this.speed = 2.2;
+        this.visualizerState = 2;
+        this.fromH = 200;
+        this.toH = 248;
+      }
+      static get is() { return 'j-spectogram'; }
+
+      static get properties() {
+        return {
+          visualizerState: {
+            type: Number,
+            notify: true
+          }
+        };
+      }
+
+      connectedCallback() {
+        super.connectedCallback();
+
+        this.ctx = this.$.canvas.getContext('2d');
+        this.temporaryCanvas = document.createElement('canvas');
+        this.temporaryCanvasCtx = this.temporaryCanvas.getContext('2d');
+
+        window.addEventListener('resize', () => {
+          this.width = window.innerWidth;
+          this.height = window.innerHeight;
+          // also update temporary canvas dimensions
+          this.temporaryCanvas.width = this.width;
+          this.temporaryCanvas.height = this.height;
+        });
+
+        window.addEventListener('keydown', () => {
+          if (event.defaultPrevented) {
+            return; // Do nothing if the event was already processed
+          }
+
+          switch (event.key) {
+            case "ArrowDown":
+              this.visualizerState = 0;
+              break;
+            case "ArrowUp":
+              this.visualizerState = 1;
+              break;
+            case "ArrowLeft":
+              this.fromH = 300;
+              this.toH = 230;
+              this.visualizerState = 2;
+              break;
+            case "ArrowRight":
+              this.fromH = 240;
+              this.toH = 360;
+              this.visualizerState = 2;
+              break;
+            case " ":
+              if (this.$.content.style.display === 'none') {
+                this.$.content.style.display = 'block';
+              } else {
+                this.$.content.style.display = 'none';
+              }
+              break;
+            default:
+              return; // Quit when this doesn't handle the key event.
+          }
+
+          // Cancel the default action to avoid it being handled twice
+          event.preventDefault();
+        })
+        this._getUserMedia.apply(this);
+      }
+
+      _getUserMedia() {
+        navigator.mediaDevices.getUserMedia({
+          audio: true
+        }).then(this._onStream.bind(this)).catch((error) => {
+          console.log(error);
+        });
+      }
+
+      _onStream(stream) {
+        let input = audioContext.createMediaStreamSource(stream);
+        let analyser = audioContext.createAnalyser();
+        analyser.smoothingTimeConstant = 0;
+        analyser.fftSize = this.fftSize;
+        input.connect(analyser);
+        this.analyser = analyser;
+        this._render();
+      }
+
+      _render() {
+        if (this.visualizerState === 0) {
+          // this.ctx.clearRect(0, 0, this.width, this.height);          
+          this._renderFrequencyData();
+          this.fromH += 0.05;
+          this.toH -= 0.05;   
+          this._renderTimeDomainData();          
+        }
+        else if (this.visualizerState === 1) {
+          // this.ctx.clearRect(0, 0, this.width, this.height);          
+          this._renderFrequencyData();
+          this._renderTimeDomainData();          
+        }
+        else if (this.visualizerState === 2) {
+          // this.ctx.clearRect(0, 0, this.width, this.height);          
+          this._renderFrequencyData();          
+          // this._renderTimeDomainData();          
+        }
+        // this._renderFrequencyData();
+        // this._renderTimeDomainData();
+        
+        requestAnimationFrame(this._render.bind(this));
+      }
+
+      _renderFrequencyData() {
+        var fdata = new Uint8Array(this.analyser.frequencyBinCount);
+        this.analyser.getByteFrequencyData(fdata);
+
+        // copy the current canvas image into temporary canvas
+        this.temporaryCanvasCtx.drawImage(this.$.canvas, 0, 0, this.$.canvas.width, this.$.canvas.height);
+
+        this.ctx.clearRect(0, 0, this.width, this.height);
+        // iterate over the frequencies
+        for (var i = 0; i < fdata.length; i++) {
+          var value;
+          let logIndex = this._logScale(i, fdata.length);
+          value = fdata[logIndex];
+          this.ctx.fillStyle = (this._getFullColor(value));
+          this.ctx.strokeStyle = (this._getFullColor(value));
+          var percent = i / fdata.length;
+          var y = Math.round(percent * this.$.canvas.height);
+
+          // draw the line at the right side of the canvas
+          if (this.visualizerState === 0) {            
+            this.ctx.fillRect(0, this.$.canvas.height - y, this.$.canvas.width, this.speed);
+          } else {
+            this.ctx.fillRect(this.$.canvas.width - this.speed, this.$.canvas.height - y, this.speed, this.speed);
+          }
+
+          this.ctx.beginPath();
+          this.ctx.arc(this.$.canvas.width - this.speed, this.$.canvas.height - y, 1, 0, 2 * Math.PI);
+          this.ctx.stroke();
+
+          // Translate the canvas.
+          this.ctx.translate(-this.speed, 0);
+          // Draw the copied image.
+          this.ctx.drawImage(this.temporaryCanvas, 0, 0, this.$.canvas.width, this.$.canvas.height,
+                        0, 0, this.$.canvas.width, this.$.canvas.height);
+
+          // Reset the transformation matrix.
+          this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+        }
+      }
+
+      _renderTimeDomainData() {
+        var tdata = new Uint8Array(this.analyser.frequencyBinCount);
+        this.analyser.getByteTimeDomainData(tdata);
+
+        // this.ctx.clearRect(0, 0, this.width, this.height);
+        for (var i = 0; i < tdata.length; i++) {
+          var value = tdata[i];
+          var percent = value / 256;
+          var barHeight = this.$.canvas.height * percent;
+          var offset = this.$.canvas.height - barHeight - 1;
+          var barWidth = this.$.canvas.width/tdata.length;
+          // this.ctx.fillStyle = 'white';
+          this.ctx.fillStyle = (this._getFullColor(value));
+          this.ctx.fillRect(i * barWidth, offset, 5, 2);
+        }
+
+      }
+
+      // source: https://github.com/borismus/spectrogram/blob/master/g-spectrogram.js
+      /**
+      * Given an index and the total number of entries, return the
+      * log-scaled value.
+      */
+      _logScale(index, total, opt_base) {
+        var base = opt_base || 2;
+        var logmax = this._logBase(total + 1, base);
+        var exp = logmax * index / total;
+        return Math.round(Math.pow(base, exp) - 1);
+      }
+
+      _logBase(val, base) {
+        return Math.log(val) / Math.log(base);
+      }
+
+      _getFullColor(value) {
+        var percent = value / 142;
+        var delta = percent * (this.toH - this.fromH);
+        var hue = this.fromH + delta;
+        return `hsl(${hue}, 100%, 50%)`;
+      }
+    }
+
+    window.customElements.define(JSpectogram.is, JSpectogram);
+  </script>
+</dom-module>
